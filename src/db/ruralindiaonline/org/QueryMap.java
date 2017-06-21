@@ -9,21 +9,45 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Set;
 
+import gudusoft.gsqlparser.EDbVendor;
+import gudusoft.gsqlparser.ESqlStatementType;
+import gudusoft.gsqlparser.TCustomSqlStatement;
+import gudusoft.gsqlparser.TGSqlParser;
+import gudusoft.gsqlparser.nodes.TResultColumn;
+
+@SuppressWarnings("serial")
 public abstract class QueryMap extends LinkedHashMap<String, Set<String>>{
 
 	private String query;
-	private String resultColumnName1;
-	private String resultColumnName2;
+	private String[] resultColumnNames;
 
-	public QueryMap(String query, String resultColumnName1, String resultColumnName2) throws Exception {
+	public QueryMap(String query) throws Exception {
 		this.query = query;
-		this.resultColumnName1 = resultColumnName1;
-		this.resultColumnName2 = resultColumnName2;
+		setResultColumnNames(query);
 		execute();
 	}
 
+	private void setResultColumnNames(String query){
+		TGSqlParser sqlparser = new TGSqlParser(EDbVendor.dbvpostgresql);
+		sqlparser.sqltext = query;
+		sqlparser.parse();
+		for (int j = 0; j < sqlparser.sqlstatements.size(); j++) {
+			TCustomSqlStatement stmt = sqlparser.sqlstatements.get(j);
+			if (stmt.sqlstatementtype == ESqlStatementType.sstselect) {
+				this.resultColumnNames = new String[stmt.getResultColumnList().size()];
+				for (int i = 0; i < resultColumnNames.length; i++) {
+					TResultColumn resultColumn = stmt.getResultColumnList().getResultColumn(i);
+					if(resultColumn.getAliasClause() != null){
+						resultColumnNames[i] = resultColumn.getAliasClause().toString();
+					}else{
+						resultColumnNames[i] = resultColumn.getExpr().toString();
+					}
+				}
+			}
+		}
+	}
 	
-	abstract void onNext(String resultColumnValue1, String resultColumnValue2) throws SQLException;
+	abstract void onNext(String[] resultColumnValues) throws SQLException;
 
 	private void execute() throws Exception {
 		Class.forName("org.postgresql.Driver");
@@ -32,7 +56,11 @@ public abstract class QueryMap extends LinkedHashMap<String, Set<String>>{
 		ResultSet set = stmt.executeQuery(query);
 
 		while (set.next()) {
-			onNext(set.getString(resultColumnName1), set.getString(this.resultColumnName2));
+			String[] values = new String[resultColumnNames.length];
+			for(int i=0;i<values.length;i++){
+				values[i] = set.getString(resultColumnNames[i]);
+			}
+			onNext(values);
 		}
 		
 		set.close();
@@ -50,7 +78,7 @@ public abstract class QueryMap extends LinkedHashMap<String, Set<String>>{
 		}
 	}
 	
-	static void fuzeQueryMaps(QueryMap photosWithNoPhotographers, QueryMap inlineImages, boolean manyToMany) {
+	static void fuzePrint(QueryMap photosWithNoPhotographers, QueryMap inlineImages, boolean manyToMany) {
 		for(String p: photosWithNoPhotographers.keySet()){
 			if(inlineImages.keySet().contains(p)){
 				Set<String> photos = photosWithNoPhotographers.get(p);
