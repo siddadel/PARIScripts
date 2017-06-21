@@ -8,7 +8,6 @@ public class AuthorFinder {
 		QueryMap inlineImages = new OriginOfImageTag("author");
 
 		QueryMap.fuzePrint(photosWithNoPhotographers, inlineImages, false);
-
 	}
 
 }
